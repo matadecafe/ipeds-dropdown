@@ -1,54 +1,70 @@
 (() => {
-  // ---- tweak this to match your field label or hardcode a selector ----
-  const LABEL_REGEX = /Institutions/i; // change to the exact label text on your form if needed
-  const DATA_URL = "https://api.lightcast.io/ipeds/health/status"; // replace with your real institutions endpoint
+  const LABEL_REGEX = /Institutions/i; // Change if your dropdown label differs
 
-  function waitForSelect(labelRegex, timeoutMs = 12000) {
-    return new Promise((resolve, reject) => {
-      const start = performance.now();
-      (function probe() {
-        const labels = Array.from(document.querySelectorAll("label"));
-        const label = labels.find(l => labelRegex.test(l.textContent.trim()));
-        const sel = label ? document.getElementById(label.getAttribute("for"))
-                          : document.querySelector("select");
-        if (sel) return resolve(sel);
-        if (performance.now() - start > timeoutMs) return reject(new Error("Dropdown not found"));
-        setTimeout(probe, 200);
-      })();
-    });
-  }
+  // 👉 Correct Lightcast institutions endpoint (paginated)
+  const API_URL = "https://api.lightcast.io/ipeds/institutions/all";
+  const LIMIT = 1000; // adjust if needed
 
-  async function fetchInstitutions() {
-    const res = await fetch(DATA_URL, {
-      headers: { "Accept": "application/json" }
-      // If you need a bearer token:
-      // headers: { "Accept": "application/json", "Authorization": "Bearer YOUR_TOKEN" }
-    });
-    if (!res.ok) throw new Error("API " + res.status);
-    const data = await res.json();
-    const list = data.institutions || data.items || data.results || data || [];
-    return list.map(x => ({
-      id: x.id || x.unitid || x.code || x.name,
-      name: (x.name || x.title || x.institution || x.school || "").toString().trim()
+  async function fetchAllInstitutions(token) {
+    let results = [];
+    let offset = 0;
+
+    while (true) {
+      const resp = await fetch(`${API_URL}/${offset}/${LIMIT}`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}` // put your token here, or proxy it
+        }
+      });
+
+      if (!resp.ok) throw new Error(`Lightcast error ${resp.status}`);
+      const page = await resp.json();
+
+      if (!Array.isArray(page) || page.length === 0) break;
+      results.push(...page);
+      if (page.length < LIMIT) break;
+
+      offset += LIMIT;
+    }
+
+    return results.map(inst => ({
+      id: inst.unitid || inst.id || inst.name,
+      name: inst.name || inst.title || inst.institution
     })).filter(r => r.name);
   }
 
   async function init() {
-    const select = await waitForSelect(LABEL_REGEX);
-    const rows = await fetchInstitutions();
+    // Find your dropdown
+    const label = Array.from(document.querySelectorAll("label"))
+      .find(l => LABEL_REGEX.test(l.textContent.trim()));
+    const select = label ? document.getElementById(label.getAttribute("for")) : null;
 
-    // reset + placeholder
+    if (!select) return console.warn("Dropdown not found!");
+
+    // Temporary placeholder
     select.innerHTML = "";
-    select.add(new Option("Select an institution…", ""));
+    select.add(new Option("Loading institutions…", ""));
 
-    // unique options
-    const seen = new Set();
-    for (const r of rows) {
-      if (seen.has(r.name)) continue;
-      seen.add(r.name);
-      select.add(new Option(r.name, r.id || r.name));
+    try {
+      // ⚠️ Replace with a real token or proxy
+      const rows = await fetchAllInstitutions("YOUR_ACCESS_TOKEN_HERE");
+
+      select.innerHTML = "";
+      select.add(new Option("Select an institution…", ""));
+      const seen = new Set();
+      rows.forEach(r => {
+        if (seen.has(r.name)) return;
+        seen.add(r.name);
+        select.add(new Option(r.name, r.id));
+      });
+    } catch (e) {
+      console.error("Error loading institutions:", e);
+      select.innerHTML = "";
+      select.add(new Option("Failed to load institutions", ""));
     }
   }
 
-  document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", init) : init();
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", init)
+    : init();
 })();
