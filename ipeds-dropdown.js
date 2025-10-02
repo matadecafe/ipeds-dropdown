@@ -1,9 +1,7 @@
 (() => {
-  const LABEL_REGEX = /Institutions/i; // Change if your dropdown label differs
-
-  // 👉 Correct Lightcast institutions endpoint (paginated)
+  const FIELD_ID = "id123-control119147262"; // 123FormBuilder auto-id
   const API_URL = "https://api.lightcast.io/ipeds/institutions/all";
-  const LIMIT = 1000; // adjust if needed
+  const LIMIT = 1000;
 
   async function fetchAllInstitutions(token) {
     let results = [];
@@ -13,10 +11,9 @@
       const resp = await fetch(`${API_URL}/${offset}/${LIMIT}`, {
         headers: {
           "Accept": "application/json",
-          "Authorization": `Bearer ${token}` // put your token here, or proxy it
+          "Authorization": `Bearer ${token}` // ⚠️ replace or proxy
         }
       });
-
       if (!resp.ok) throw new Error(`Lightcast error ${resp.status}`);
       const page = await resp.json();
 
@@ -34,19 +31,15 @@
   }
 
   async function init() {
-    // Find your dropdown
-    const label = Array.from(document.querySelectorAll("label"))
-      .find(l => LABEL_REGEX.test(l.textContent.trim()));
-    const select = label ? document.getElementById(label.getAttribute("for")) : null;
+    const select = document.getElementById(FIELD_ID);
+    if (!select) return console.warn("Dropdown not found:", FIELD_ID);
 
-    if (!select) return console.warn("Dropdown not found!");
-
-    // Temporary placeholder
+    // Loading placeholder
     select.innerHTML = "";
     select.add(new Option("Loading institutions…", ""));
 
     try {
-      // ⚠️ Replace with a real token or proxy
+      // ⚠️ For now, paste token here (unsafe) OR proxy it with Apps Script
       const rows = await fetchAllInstitutions("YOUR_ACCESS_TOKEN_HERE");
 
       select.innerHTML = "";
@@ -57,8 +50,8 @@
         seen.add(r.name);
         select.add(new Option(r.name, r.id));
       });
-    } catch (e) {
-      console.error("Error loading institutions:", e);
+    } catch (err) {
+      console.error("Failed to load institutions:", err);
       select.innerHTML = "";
       select.add(new Option("Failed to load institutions", ""));
     }
